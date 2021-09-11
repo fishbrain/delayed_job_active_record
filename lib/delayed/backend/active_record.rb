@@ -61,6 +61,11 @@ module Delayed
           )
         end
 
+        # See: https://github.com/collectiveidea/delayed_job_active_record/pull/163
+        def self.recover_from(_error)
+          ::ActiveRecord::Base.connection.verify!
+        end
+
         def self.before_fork
           ::ActiveRecord::Base.clear_all_connections!
         end
@@ -122,6 +127,7 @@ module Delayed
           end
         end
 
+        # See: https://github.com/collectiveidea/delayed_job_active_record/pull/169
         def self.reserve_with_scope_using_optimized_postgres(ready_scope, worker, now)
           # Custom SQL required for PostgreSQL because postgres does not support UPDATE...LIMIT
           # This locks the single record 'FOR UPDATE' in the subquery
@@ -131,7 +137,7 @@ module Delayed
           # use 'FOR UPDATE' and we would have many locking conflicts
           quoted_name = connection.quote_table_name(table_name)
           subquery    = ready_scope.limit(1).lock(true).select("id").to_sql
-          sql         = "UPDATE #{quoted_name} SET locked_at = ?, locked_by = ? WHERE id IN (#{subquery}) RETURNING *"
+          sql         = "UPDATE #{quoted_name} SET locked_at = ?, locked_by = ? WHERE id = (#{subquery}) RETURNING *"
           reserved    = find_by_sql([sql, now, worker.name])
           reserved[0]
         end
